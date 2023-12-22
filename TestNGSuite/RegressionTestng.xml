@@ -1,0 +1,15 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE suite SYSTEM "http://testng.org/testng-1.0.dtd">
+<suite name="All Test Suite">
+    <groups>
+        <run>
+            <include name="Regression"/>
+        </run>
+    </groups>
+    <test verbose="2" preserve-order="true" name="Regression Test">
+        <classes>
+            <class name="ExecutionPKG.SubmitOrderTest"/>
+            <class name="ExecutionPKG.ErrorValidationTest"/>
+        </classes>
+    </test>
+</suite>
