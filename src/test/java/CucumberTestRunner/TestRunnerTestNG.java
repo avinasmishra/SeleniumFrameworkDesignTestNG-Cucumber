@@ -5,7 +5,7 @@ import io.cucumber.testng.CucumberOptions;
 
 
 @CucumberOptions(
-        features = "src/test/java/CucumberFeature",
+        features = "src/test/java/CucumberFeature/BOOAO.feature",
         glue = "CucumberStepDefinition",
         monochrome = true,
         //tags = "@LoginError",
