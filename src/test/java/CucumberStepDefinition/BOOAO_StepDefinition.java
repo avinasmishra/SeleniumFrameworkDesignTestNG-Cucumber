@@ -2,12 +2,16 @@ package CucumberStepDefinition;
 
 import TestComponents.BaseTest;
 import Utility.ConfigReader;
+import io.cucumber.datatable.DataTable;
 import io.cucumber.java.en.*;
+import io.cucumber.java.sl.Ce;
+import io.cucumber.java.sl.In;
 import org.apache.pdfbox.Loader;
 import org.apache.pdfbox.pdmodel.PDDocument;
 import org.apache.pdfbox.text.PDFTextStripper;
 import org.apache.poi.hssf.usermodel.HSSFWorkbook;
 import org.apache.poi.ss.usermodel.*;
+import org.apache.poi.xssf.usermodel.XSSFSheet;
 import org.apache.poi.xssf.usermodel.XSSFWorkbook;
 import org.openqa.selenium.*;
 import org.openqa.selenium.NoSuchElementException;
@@ -17,9 +21,7 @@ import org.openqa.selenium.support.ui.FluentWait;
 import java.awt.*;
 import java.awt.datatransfer.StringSelection;
 import java.awt.event.KeyEvent;
-import java.io.File;
-import java.io.FileInputStream;
-import java.io.IOException;
+import java.io.*;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.Paths;
@@ -31,9 +33,31 @@ import java.util.regex.Pattern;
 
 public class BOOAO_StepDefinition extends BaseTest {
     private static Map<String, String> globalVariables = new HashMap<>();
+    private static List<String> globalVariableList;
     static String Execution_Downloads_Folder = System.getProperty("user.home") + File.separator + "Downloads" + File.separator + "Execution_Downloads";
     static Path folderString = Paths.get(Execution_Downloads_Folder);
+    static String DOWNLOAD_FOLDER = System.getProperty("user.home")+ File.separator + "Downloads";
 
+    //AutoIT execution files
+    static String AutoItFolderPath = System.getProperty("user.dir") + "\\src\\test\\resources\\data\\AutoIT";
+    static String AutoIT_ExcelFileSave = AutoItFolderPath + "ExcelFileSave.exe";
+    static String AutoIT_ExcelFileSaveCompatibility = AutoItFolderPath + "ExcelFileSaveCompatibilitty.exe";
+
+
+    public static boolean isNum(String st)
+    {
+        if(st == null | st.equals(""))
+        {
+            return false;
+        }
+        try{
+            Integer.parseInt(st);
+            return true;
+        }catch (NumberFormatException e)
+        {
+            return false;
+        }
+    }
     public static void scrollLittleAbove(WebElement webElement, JavascriptExecutor jse, int scrollTillPosition) {
         int elementY = webElement.getLocation().getY();
         int offsetY = scrollTillPosition;
@@ -51,6 +75,15 @@ public class BOOAO_StepDefinition extends BaseTest {
             key = key.substring(1, key.length() - 1);  // Remove leading and trailing %
         }
         return globalVariables.get(key);
+    }
+
+    private void setGlobalVariableList(String globalVarKey, List<String> value)
+    {
+        globalVariableList = value;
+    }
+    private List<String> getGlobalVariableList(String globalVarKey)
+    {
+        return globalVariableList;
     }
 
 
@@ -164,6 +197,24 @@ public class BOOAO_StepDefinition extends BaseTest {
             System.out.println("Some Eror Occured: " + e.getMessage());
         }
     }
+
+        @Then("user creates global variables from UI controls")
+        public void createGlobalVarsFromUIControls(DataTable table) {
+            List<Map<String, String>> rows = table.asMaps(String.class, String.class);
+            for (Map<String, String> row : rows) {
+                for (Map.Entry<String, String> entry : row.entrySet()) {
+                    String rawKey = entry.getKey();
+                    String locator = entry.getValue();
+
+                    String key = rawKey.replaceAll("%", ""); // Remove surrounding %
+                    WebElement element = driver.findElement(By.xpath(locator));
+                    String value = element.getText().trim();
+
+                    setGlobalVariable(key, value);
+                    System.out.println("Set global variable: " + key + " = " + value);
+                }
+            }
+        }
 
 
     ///////////////////// PDF VALIDATION /////////////////////////////
@@ -537,8 +588,6 @@ public class BOOAO_StepDefinition extends BaseTest {
 
 ///////////////////// EXCEL VALIDATION /////////////////////////////
 
-    private static final String DOWNLOAD_FOLDER = System.getProperty("user.home")+ File.separator + "Downloads";
-
     public static void createFolder(String folderString)
     {
         Path folderStringPath = Paths.get(folderString);
@@ -580,6 +629,89 @@ public class BOOAO_StepDefinition extends BaseTest {
                 }
             }
         }
+    }
+    //get workbook object in return
+    public static XSSFWorkbook getWorkbook(String filePath) throws IOException {
+        FileInputStream fileInputStream = new FileInputStream(filePath);
+        XSSFWorkbook workbook = new XSSFWorkbook(fileInputStream);
+        return workbook;
+    }
+
+    //method to save the workbook by passing excel path and workbook
+    public static void saveWorkbook(String filePath, XSSFWorkbook workbook) throws IOException
+    {
+        FileOutputStream fileOutputStream = new FileOutputStream(filePath);
+        workbook.write(fileOutputStream);
+        workbook.close();
+    }
+
+    //method to get row number based on value in first column
+    public static int getRowNumByLabel(XSSFSheet sheet, String label_To_Search) throws Exception
+    {
+        int rowCount = sheet.getLastRowNum() - sheet.getFirstRowNum();
+        int labelRow = -1;
+        System.out.println("Row Count:: "+rowCount);
+
+        for(int i=0;i<=rowCount;i++)
+        {
+            Row newRow = sheet.getRow(i);
+            String label = newRow.getCell(0).getStringCellValue();
+            if(label.equalsIgnoreCase(label_To_Search))
+            {
+                labelRow = i;
+                break;
+            }
+        }
+        if(labelRow == -1)
+        {
+            throw new Exception("Error Label "+ label_To_Search + " Not Found in "+ sheet.getSheetName() + " sheet");
+        }
+        return labelRow;
+    }
+
+    //method to get column number based on value in header row
+    public static int getColumnNumByVariable(XSSFSheet sheet, String header_To_Search) throws Exception
+    {
+        Row newRow = sheet.getRow(0);
+        int columnCount = newRow.getLastCellNum();
+        int columnNum = -1;
+        System.out.println("Column Count:: "+columnCount);
+
+        for(int i=0;i<columnCount;i++)
+        {
+            String header = newRow.getCell(i).getStringCellValue();
+            if(header.equalsIgnoreCase(header_To_Search))
+            {
+                columnNum = i;
+                break;
+            }
+        }
+        if(columnNum == -1)
+        {
+            throw new Exception("Error Header "+ header_To_Search + " Not Found in "+ sheet.getSheetName() + " sheet");
+        }
+        return columnNum;
+    }
+
+    //method to write in cell by passing sheet, row number, column number and value to write
+    public static void writeInCell(XSSFSheet sheet, int labelRowNum, int columnNum, String valueToWrite, String filePath, XSSFWorkbook workbook) throws IOException
+    {
+        Row row = sheet.getRow(labelRowNum);
+        Cell cell = row.createCell(columnNum);
+        cell.setCellValue(valueToWrite);
+        saveWorkbook(filePath,workbook);
+    }
+
+    //final method to write in excel by passing excel path, label to search row, num, header name, col name and value to write
+    public static void methodToWriteInExcelByLabelHeader(String filePath, String sheetName, String label_To_Search, String header_To_Search, String valueToWrite) throws Exception
+    {
+        XSSFWorkbook workbook = getWorkbook(filePath);
+        XSSFSheet sheet = workbook.getSheet(sheetName);
+        int labelRowNum = isNum(label_To_Search) ? Integer.parseInt(label_To_Search) : getRowNumByLabel(sheet,label_To_Search);
+        System.out.println("labelRowNum: "+labelRowNum);
+        int columnNum = isNum(header_To_Search) ? Integer.parseInt(header_To_Search) : getColumnNumByVariable(sheet,header_To_Search);
+        System.out.println("columnNum: "+columnNum);
+        writeInCell(sheet,labelRowNum,columnNum, valueToWrite, filePath, workbook);
     }
 
     @Given("^user creates global variables from \\[(.+?),\\s*(.+?),\\s*(.+?)]$")
@@ -816,12 +948,289 @@ public class BOOAO_StepDefinition extends BaseTest {
         }
     }
 
+    @Then("User deletes all excel files in temp folder")
+    public void deleteAllExcelFilesInTemp()
+    {
+        String folderPath = System.getProperty("user.home") + "\\AppData\\Local\\temp";
 
+        File folder = new File(folderPath);
+        int filesDeletedCount = 0;
 
+        if(folder.exists() && folder.isDirectory())
+        {
+            File[] files = folder.listFiles();
+            if(files != null)
+            {
+                for(File file : files)
+                {
+                    if(file.isFile() && file.getName().toLowerCase().endsWith(".xls") || file.getName().toLowerCase().endsWith(".xlsx"))
+                    {
+                        if(file.delete())
+                        {
+                            filesDeletedCount++;
+                        }
+                        else {
+                            System.out.println("Unable to delete the file : "+file.getName());
+                        }
+                    }
+                }
+                System.out.println("Total file deleted : "+filesDeletedCount);
+            }
+        }
+    }
 
+    @Then("Validate the actual UI text value \"(.*)\" with expected excel text value \"(.*)\"$")
+    public void validateActualUIAndExpectedExcelText(String expectedResult, String excelFilePath)
+    {
+        try{
+            FileInputStream excelFile = null;
+            Workbook workbook = null;
 
+            if(excelFilePath.startsWith("%"))
+            {
+                excelFilePath = getGlobalVariable(excelFilePath);
+            }
+            if(expectedResult.startsWith("%"))
+            {
+                expectedResult = getGlobalVariable(expectedResult);
+            }
 
+            List<String> expectedTextMsg = new ArrayList<>();
+            boolean valueFound = false ;
 
+            String downloadsPath = Execution_Downloads_Folder + "/" + excelFilePath;
+            System.out.println("Path To Open Excel => "+ downloadsPath);
+            excelFile = new FileInputStream(downloadsPath);
+
+            if (downloadsPath.endsWith(".xlsx")) {
+                workbook = new XSSFWorkbook(excelFile);
+            } else if (downloadsPath.endsWith(".xls")) {
+                workbook = new HSSFWorkbook(excelFile);
+            } else {
+                throw new IllegalArgumentException("Invalid file format: ");
+            }
+            Sheet sheet = workbook.getSheetAt(0);
+            String sheetName = workbook.getSheetName(0);
+            System.out.println("Fetching Data From Sheet: " + sheetName);
+
+            //Header row
+            for(Row row : sheet)
+            {
+                for(Cell cell : row)
+                {
+                    if(cell != null && cell.getCellType() != CellType.BLANK)
+                    {
+                        if(cell.getCellType() == CellType.STRING)
+                        {
+                            String cellValue = cell.getStringCellValue().toLowerCase().trim();
+                            if(expectedResult.contains(cellValue))
+                            {
+                                valueFound = true;
+                                break;
+                            }
+                        } else if (cell.getCellType() == CellType.NUMERIC)
+                        {
+                            String cellValue = String.valueOf(cell.getNumericCellValue()).toLowerCase().trim();
+                            if(expectedResult.contains(cellValue))
+                            {
+                                valueFound = true;
+                                break;
+                            }
+                        }
+                    }
+                }
+                if(valueFound)
+                {
+                    break;
+                }
+            }
+            if(valueFound)
+            {
+                System.out.println("Text value present in excel sheet : "+ expectedResult);
+            }
+            else{
+                System.out.println("Text value not present in excel sheet : "+ expectedResult);
+            }
+            workbook.close();
+            excelFile.close();
+        } catch (Exception e) {
+            System.out.println("Failed to read Excel file: " + e.getMessage());
+        }
+    }
+
+    @Then("^User click and download Excel file (.*) control and store in global variable \"(.*)\"$")
+    public void saveExcelFileInGlobalVar(String strElement, String globalVarKey)
+    {
+        try{
+            WebElement element = driver.findElement(By.xpath(strElement));
+
+            //click on button to download excel file
+            element.click();
+            Thread.sleep(10000);
+
+            //retrieve the latest downloaded file
+            File folder = new File(DOWNLOAD_FOLDER);
+            if(!folder.exists() || !folder.isDirectory())
+            {
+                throw new IllegalArgumentException("Invalid Download folder path");
+            }
+
+            File[] files = folder.listFiles();
+            if(files == null || files.length == 0)
+            {
+                throw new IllegalArgumentException("No files found in download folder");
+            }
+
+            //sort files by last modify time in descending order
+            Arrays.sort(files,Comparator.comparingLong(File::lastModified).reversed());
+
+            //get the latest file
+            File latestFile = files[0];
+
+            createFolder(Execution_Downloads_Folder);
+            String downloadPath = Execution_Downloads_Folder + "/" + latestFile.getName();
+            File targetFile = new File(downloadPath);
+
+            //copy the file to target path
+            Files.copy(latestFile.toPath(), targetFile.toPath());
+
+            //store in global variable
+            setGlobalVariable(globalVarKey, targetFile.getName());
+            System.out.println("File copied and stored in global variable "+ targetFile.getAbsolutePath());
+        }catch (Exception e)
+        {
+            System.out.println("Some Error Occured :"+e.getMessage());
+        }
+    }
+
+    @Then("User copy excel headers from \"(.*)\" and store in global variable \"(.*)\"$")
+    public void storeAllExcelHeaders(String excelFilePath, String globalVarKey)
+    {
+        try {
+            FileInputStream excelFile = null;
+            Workbook workbook = null;
+            List<String> excelHeaders = new ArrayList<>();
+
+            if(excelFilePath.startsWith("%"))
+            {
+                excelFilePath = getGlobalVariable(excelFilePath);
+            }
+
+            String downloadsPath = Execution_Downloads_Folder + "/" + excelFilePath;
+            System.out.println("Path To Open Excel => "+ downloadsPath);
+            excelFile = new FileInputStream(downloadsPath);
+
+            if (downloadsPath.endsWith(".xlsx")) {
+                workbook = new XSSFWorkbook(excelFile);
+            } else if (downloadsPath.endsWith(".xls")) {
+                workbook = new HSSFWorkbook(excelFile);
+            } else {
+                throw new IllegalArgumentException("Invalid file format: ");
+            }
+            Sheet sheet = workbook.getSheetAt(0);
+            String sheetName = workbook.getSheetName(0);
+            System.out.println("Fetching Data From Sheet: " + sheetName);
+
+            //Headers Row
+            Row headerRow = sheet.getRow(1);
+            for(Cell cell : headerRow)
+            {
+                excelHeaders.add(cell.toString().toLowerCase().trim());
+            }
+
+            //storing in glovalvar key
+            setGlobalVariableList(globalVarKey, excelHeaders);
+            System.out.println("Excel Sheet [" + sheetName + "] Headers are "+ excelHeaders);
+            workbook.close();
+            excelFile.close();
+        }catch (Exception e)
+        {
+            System.out.println("Some Error Occured "+e.getMessage());
+        }
+    }
+
+    @When("^User clicks on (.*) control and save excel with file name \"(.*)\" using AutoIT$")
+    public void downloadExcelFileusingAutoIT(String element, String fileName)
+    {
+        try {
+            ((JavascriptExecutor) driver).executeScript("window.focus();");
+
+            if(fileName.startsWith("%"))
+            {
+                fileName = getGlobalVariable(fileName);
+            }
+
+            createFolder(Execution_Downloads_Folder);
+            File file = new File(Execution_Downloads_Folder, fileName);
+
+            StringSelection ss = new StringSelection(file.getAbsolutePath());
+            Toolkit.getDefaultToolkit().getSystemClipboard().setContents(ss,null);
+
+            Runtime.getRuntime().exec(AutoIT_ExcelFileSave);
+
+            driver.findElement(By.xpath(element)).click();
+
+            long maxWaitTime = 180000;
+            long timeoutMillis = 180000;
+            long startTime = System.currentTimeMillis();
+
+            try{
+
+                //Define timeout duration eg-> 60 seconds
+                startTime = System.currentTimeMillis();
+                boolean fileDownloaded = false;
+                Thread.sleep(10000);
+                File folder = new File(Execution_Downloads_Folder);
+                File[] listOfFiles = folder.listFiles();
+
+                do{
+                    //check if file exist
+                    if(listOfFiles != null)
+                    {
+                        for(File files : listOfFiles)
+                        {
+                            System.out.println(files.getName());
+                            files.exists();
+                        }
+                    }
+                    else{
+                        System.out.println("file not exist");
+                    }
+                    if(file.exists())
+                    {
+                        fileDownloaded = true;
+                        System.out.println("File has been downloaded "+ file.getAbsolutePath());
+                    }
+                    else{
+                        System.out.println("file not found, checking again...");
+                        try{
+                            Thread.sleep(1000);
+                        }catch (InterruptedException e)
+                        {
+                            e.printStackTrace();
+                        }
+                    }
+
+                    //check if timeout has been reached
+                    if(System.currentTimeMillis() - startTime > timeoutMillis)
+                    {
+                        System.out.println("Timeout reached. file not found");
+                        break;
+                    }
+                }
+                while (!fileDownloaded);
+                System.out.println("download check completed");
+
+            }catch (Exception e)
+            {
+                e.printStackTrace();
+                throw e;
+            }
+        }catch (Exception e)
+        {
+            System.out.println("Some Error Occured "+ e.getMessage());
+        }
+    }
 
 
 
