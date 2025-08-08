@@ -25,7 +25,11 @@ import java.io.*;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.Paths;
+import java.sql.*;
 import java.time.Duration;
+import java.time.LocalDate;
+import java.time.format.DateTimeFormatter;
+import java.time.temporal.ChronoUnit;
 import java.util.*;
 import java.util.List;
 import java.util.regex.Matcher;
@@ -36,7 +40,7 @@ public class BOOAO_StepDefinition extends BaseTest {
     private static List<String> globalVariableList;
     static String Execution_Downloads_Folder = System.getProperty("user.home") + File.separator + "Downloads" + File.separator + "Execution_Downloads";
     static Path folderString = Paths.get(Execution_Downloads_Folder);
-    static String DOWNLOAD_FOLDER = System.getProperty("user.home")+ File.separator + "Downloads";
+    static String DOWNLOAD_FOLDER = System.getProperty("user.home") + File.separator + "Downloads";
 
     //AutoIT execution files
     static String AutoItFolderPath = System.getProperty("user.dir") + "\\src\\test\\resources\\data\\AutoIT";
@@ -44,20 +48,18 @@ public class BOOAO_StepDefinition extends BaseTest {
     static String AutoIT_ExcelFileSaveCompatibility = AutoItFolderPath + "ExcelFileSaveCompatibilitty.exe";
 
 
-    public static boolean isNum(String st)
-    {
-        if(st == null | st.equals(""))
-        {
+    public static boolean isNum(String st) {
+        if (st == null | st.equals("")) {
             return false;
         }
-        try{
+        try {
             Integer.parseInt(st);
             return true;
-        }catch (NumberFormatException e)
-        {
+        } catch (NumberFormatException e) {
             return false;
         }
     }
+
     public static void scrollLittleAbove(WebElement webElement, JavascriptExecutor jse, int scrollTillPosition) {
         int elementY = webElement.getLocation().getY();
         int offsetY = scrollTillPosition;
@@ -65,24 +67,22 @@ public class BOOAO_StepDefinition extends BaseTest {
         jse.executeScript("window.scrollTo(0,arguments[0]);", scrollPostion);
     }
 
-    public static void setGlobalVariable(String key, String value)
-    {
-        globalVariables.put(key,value);
+    public static void setGlobalVariable(String key, String value) {
+        globalVariables.put(key, value);
     }
-    public static String getGlobalVariable(String key)
-    {
+
+    public static String getGlobalVariable(String key) {
         if (key != null && key.startsWith("%") && key.endsWith("%")) {
             key = key.substring(1, key.length() - 1);  // Remove leading and trailing %
         }
         return globalVariables.get(key);
     }
 
-    private void setGlobalVariableList(String globalVarKey, List<String> value)
-    {
+    private void setGlobalVariableList(String globalVarKey, List<String> value) {
         globalVariableList = value;
     }
-    private List<String> getGlobalVariableList(String globalVarKey)
-    {
+
+    private List<String> getGlobalVariableList(String globalVarKey) {
         return globalVariableList;
     }
 
@@ -198,23 +198,138 @@ public class BOOAO_StepDefinition extends BaseTest {
         }
     }
 
-        @Then("user creates global variables from UI controls")
-        public void createGlobalVarsFromUIControls(DataTable table) {
-            List<Map<String, String>> rows = table.asMaps(String.class, String.class);
-            for (Map<String, String> row : rows) {
-                for (Map.Entry<String, String> entry : row.entrySet()) {
-                    String rawKey = entry.getKey();
-                    String locator = entry.getValue();
+    @Then("user creates global variables from UI controls")
+    public void createGlobalVarsFromUIControls(DataTable table) {
+        List<Map<String, String>> rows = table.asMaps(String.class, String.class);
+        for (Map<String, String> row : rows) {
+            for (Map.Entry<String, String> entry : row.entrySet()) {
+                String rawKey = entry.getKey();
+                String locator = entry.getValue();
 
-                    String key = rawKey.replaceAll("%", ""); // Remove surrounding %
-                    WebElement element = driver.findElement(By.xpath(locator));
-                    String value = element.getText().trim();
+                String key = rawKey.replaceAll("%", ""); // Remove surrounding %
+                WebElement element = driver.findElement(By.xpath(locator));
+                String value = element.getText().trim();
 
-                    setGlobalVariable(key, value);
-                    System.out.println("Set global variable: " + key + " = " + value);
-                }
+                setGlobalVariable(key, value);
+                System.out.println("Set global variable: " + key + " = " + value);
             }
         }
+    }
+
+    @When("User set date in From Date (.*) control along with To Date (.*) control and click on (.*) control post verify records (.*) control displayed")
+    public void dateSearch(String fromDateElement, String toDateElement, String serachBtnElement, String recordfoundElement) throws Throwable {
+        //we search with first 3 months- if records found then good to go, else checking previous to previous 3 months like wise
+        JavascriptExecutor jse = (JavascriptExecutor) driver;
+
+        //Initialize date calculation
+        DateTimeFormatter formatter = DateTimeFormatter.ofPattern("MM/dd/yyyy");
+        LocalDate today = LocalDate.now();
+        LocalDate yesterday = today.minusDays(1);
+        LocalDate threeMonthsAgo = today.minus(3, ChronoUnit.MONTHS);
+
+        int maxAttempts = 24;
+        int attempt = 0;
+        boolean recordsFound = false;
+
+        while (attempt < maxAttempts && !recordsFound) {
+            try {
+                WebElement fromDateInput = null;
+                WebElement searchButton = null;
+
+                //setDate
+                fromDateInput = driver.findElement(By.xpath(fromDateElement));
+                fromDateInput.clear();
+                Thread.sleep(2000);
+                fromDateInput = driver.findElement(By.xpath(fromDateElement));
+                fromDateInput.sendKeys(threeMonthsAgo.format(formatter));
+
+                Thread.sleep(2000);
+                driver.findElement(By.xpath(toDateElement)).sendKeys(yesterday.format(formatter));
+
+                Thread.sleep(2000);
+                searchButton = driver.findElement(By.xpath(serachBtnElement));
+                jse.executeScript("arguments[0].click();", searchButton);
+                Thread.sleep(5000);
+
+                try {
+                    WebElement recordsElement = driver.findElement(By.xpath(recordfoundElement));
+                    if (recordsElement.isDisplayed()) {
+                        recordsFound = true;
+                        System.out.println("Records Founds");
+                    }
+                } catch (NoSuchElementException e) {
+                    System.out.println("No Records founds, Adjusting date range");
+
+                    //Update date range
+                    today = threeMonthsAgo;
+                    threeMonthsAgo = threeMonthsAgo.minus(3, ChronoUnit.MONTHS);
+                    attempt++;
+                    Thread.sleep(2000);
+                }
+            } catch (StaleElementReferenceException e) {
+                continue;
+            }
+        }
+        if (!recordsFound) {
+            System.out.println("NO Records found after " + maxAttempts + " attempts..");
+        }
+    }
+
+    @Then("Verify multiple documents (.*) control should not be upload at a time")
+    public void multipleDocUpload(String strElement) {
+        try {
+            WebElement element = driver.findElement(By.xpath(strElement));
+
+            String filesPath = System.getProperty("user.dir") + "\\src\\test\\resources\\data\\";
+
+            File file1 = new File(filesPath + "text_file1.txt");
+            File file2 = new File(filesPath + "text_file2.txt");
+
+            String combineBothPath = file1.getAbsolutePath() + "\n" + file2.getAbsolutePath();
+            try {
+                element.sendKeys(combineBothPath);
+            } catch (Exception e) {
+                System.out.println("Error Message: Element can not hold multiple files");
+            }
+        } catch (Exception e) {
+            System.out.println("Some error occured");
+        }
+    }
+
+    @When("User upload file for (.*) control with filename as (.*) without filetype")
+    public void uploadFileWithoutFileType(String strElement, String filenameWithExt) throws Throwable
+    {
+        try {
+            String filePath = System.getProperty("user.dir") + File.separator + "src\\test\\resources\\data\\" + File.separator + filenameWithExt;
+
+            WebElement fileWebElement = driver.findElement(By.xpath(strElement));
+            fileWebElement.click();
+            Thread.sleep(5000);
+
+            Robot robot = new Robot();
+            robot.setAutoDelay(3000);
+            StringSelection ss = new StringSelection(filePath);
+            Toolkit.getDefaultToolkit().getSystemClipboard().setContents(ss, null);
+            robot.delay(2000);
+
+            robot.keyPress(KeyEvent.VK_CONTROL);
+            robot.keyPress(KeyEvent.VK_V);
+            robot.keyRelease(KeyEvent.VK_V);
+            robot.keyRelease(KeyEvent.VK_CONTROL);
+
+            robot.keyPress(KeyEvent.VK_ENTER);
+            robot.keyRelease(KeyEvent.VK_ENTER);
+            Thread.sleep(2000);
+            System.out.println("File Upload Completed ");
+
+        }catch (Exception e)
+        {
+            System.out.println("File Upload filed with reason => " + e.getMessage());
+        }
+    }
+
+
+
 
 
     ///////////////////// PDF VALIDATION /////////////////////////////
@@ -1229,6 +1344,60 @@ public class BOOAO_StepDefinition extends BaseTest {
         }catch (Exception e)
         {
             System.out.println("Some Error Occured "+ e.getMessage());
+        }
+    }
+
+
+    /////////////// MISCELLANEOUS ///////////////////////
+
+    public void m1() {
+        //XPATH LIKE:
+        String strElement = "//(div[contains(@id,'dvMaintainHeader')])[replaceValue]";
+        int count = driver.findElements(By.xpath(strElement.replace("[replaceValue]", ""))).size();
+        for (int i = 1; i <= count; i++) {
+            WebElement element = driver.findElement(By.xpath(strElement.replace("replaceValue", Integer.toString(i))));
+            element.click();
+        }
+    }
+
+    ///////// DataBase Connection ///////
+
+    public static void main(String[] args)
+    {
+        String url = "jdbc:db2://db2...com:446/D92T";
+        String user ="";
+        String password = "";
+
+        Statement statement = null;
+        ResultSet resultSet = null;
+
+        try {
+            Class.forName("com.ibm.db2.jcc.DB2Driver");
+
+            Connection connection = DriverManager.getConnection(url, user, password);
+            if(connection != null)
+            {
+                System.out.println("Connection Successfull");
+                statement = connection.createStatement();
+
+                String query = "Select * from customerTable where id=10001";
+
+                resultSet = statement.executeQuery(query);
+
+                while (resultSet.next())
+                {
+                    String accountNumber = resultSet.getString("Account");
+                    System.out.println("Account Number :" + accountNumber);
+                }
+            }
+        }catch (ClassNotFoundException e)
+        {
+            System.out.println("DB2 JDBC Driver not found");
+            e.printStackTrace();
+        }catch (SQLException e)
+        {
+            System.out.println("SQL Error Occured");
+            e.printStackTrace();
         }
     }
 
